@@ -322,15 +322,23 @@ function printReport(){
   S.downloaded=true;sendEvent('downloaded_pdf');const t=document.title;document.title=`bond-voyage_${U.key.replace(/[^a-z0-9]/g,'_')}_attempt${S.n}_round${S.round}`;
   window.print();setTimeout(()=>document.title=t,1500);
 }
-function goSurvey(){sendEvent('quit_to_survey');S.finished=true;if(G.surveyUrl)location.href=G.surveyUrl}
+function goSurvey(){
+  sendEvent('quit_to_survey');S.finished=true;
+  if(window.parent!==window){
+    // embedded in Qualtrics: tell the survey to continue
+    window.parent.postMessage({type:'gameDone',userId:U.name,attempts:S.n,rounds:S.round,badges:S.badges.length,score:S.score},'https://imperial.eu.qualtrics.com');
+  }else if(G.surveyUrl){
+    location.href=G.surveyUrl; // opened directly: old behaviour
+  }
+}
 function quitToSurvey(){if(S.downloaded)goSurvey();else ask('Leave without your report?','You have not downloaded your report (PDF) yet. If you quit now you will not be able to see it again.','Quit and open the survey',goSurvey)}
-function showFinal(reason){
+function showFinal(reason){const EMB=window.parent!==window;
   S.finished=true;saveRound(reason);send(reason);
   const mainLog=S.log.filter(l=>l.kind==='Main'),times=Object.entries(S.times).sort((a,b)=>b[1]-a[1]),longest=[...mainLog].sort((a,b)=>b.time-a.time).slice(0,5),hinted=S.log.filter(l=>l.hint);
   const msg=reason==='timeout'?'The game ended automatically after 24 hours without activity.':reason==='closed'?'The game ended because the window was closed.':reason==='new_attempt'?'':'';
   const surv=G.surveyUrl?`<a href="${G.surveyUrl}" target="_blank" rel="noopener">${esc(G.surveyUrl)}</a>`:'(link coming soon)';
   $('finBody').innerHTML=`<div class="panel"><h2 style="font-size:16px">🏆 Report</h2><p>${esc(U.name)} · attempt ${S.n}, round ${S.round}</p>${msg?`<p><b>${msg}</b></p>`:''}
-   <p>Thank you for playing, don't forget to complete the post-game survey: ${surv}</p></div>
+   <p>${EMB?'Thank you for playing! When you are ready, press the blue button below to continue to the post-game survey.':'Thank you for playing, don\'t forget to complete the post-game survey: '+surv}</p></div>
    <div class="panel" style="break-inside:auto"><h3>Badges (${S.badges.length}/${BADGES.length})</h3>${BADGES.map(b=>`<div class="brow">${S.badges.includes(b)?`<span class="badge">🏅 ${esc(b)}${(U.earned&&U.earned[b]&&U.earned[b]!==S.n)?` · attempt ${U.earned[b]}`:''}</span>`:`<span class="badge lk">🔒 ${esc(b)}</span>`}<span class="bdesc">${esc(BDESC[b]||'')}</span></div>`).join('')}</div>
    <div class="panel"><h3>Total score</h3><div style="font-size:28px;font-weight:800">${S.score} pts</div></div>
    <div class="panel"><h3>Your station route</h3>${S.route.length?S.route.map(nm).join(' → '):'No stations completed yet'}</div>
@@ -341,7 +349,7 @@ function showFinal(reason){
    <div class="panel"><h3>CoMS concepts (optional, not scored)</h3>${STATIONS.map(s=>`<div>${esc(s.name)}: ${s.practice.length?cnt(S.pd[s.id])+'/'+s.practice.length:'coming soon'}</div>`).join('')}</div>
    <div class="panel noprint"><h3>Your progress report</h3><p>${esc(G.reportNote||'')}</p><button class="btn g" onclick="printReport()">⬇ Download report (PDF)</button>
    <p style="font-size:13px">Your browser's print window will open. Choose <b>Save as PDF</b> as the destination.</p>
-   <button class="btn" onclick="quitToSurvey()">Quit game &amp; open the post-game survey</button></div>
+   <button class="btn" onclick="quitToSurvey()">${EMB?'Finish &amp; continue to the post-game survey':'Quit game &amp; open the post-game survey'}</button></div>
    <div class="panel noprint"><button class="btn" onclick="nextRound()">Back to map – start round ${S.round+1}</button>
    <p style="font-size:13px">Round ${S.round+1} lets you replay finished concepts to try for the no-wrong-answer and no-hint badges.</p>
    <button class="btn r" onclick="askNew()">Start a new attempt</button></div>`;
