@@ -88,6 +88,7 @@ const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt
 const rich=s=>esc(s).replace(/&lt;(\/?)(sub|sup|b)&gt;/g,'<$1$2>'),bold=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>'),plain=s=>String(s??'').replace(/<[^>]+>/g,'');
 const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
 const fmt=ms=>{const s=Math.round(ms/1000);return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s'};
+const short=l=>l.q.length>140?esc(l.q.slice(0,140))+'…':rich(l.qr||l.q);
 const sec=ms=>Math.round(ms/100)/10;
 const LS='bondvoyage_users',loadU=()=>{try{return JSON.parse(localStorage.getItem(LS))||{}}catch(e){return{}}},saveU=u=>{try{localStorage.setItem(LS,JSON.stringify(u))}catch(e){}};
 const QP=new URLSearchParams(location.search),PID=(QP.get('pid')||QP.get('PID')||QP.get('rid')||'').trim().slice(0,60),RET=QP.get('ret')||'';
@@ -218,7 +219,7 @@ function nextQ(){
 function answer(i){
   const c=S.cur,Q=c.q,ok=i===Q.answer,time=Date.now()-c.qStart,L='ABCD',strip=t=>String(t||'').replace(/^\s*(<[^>]+>)*\s*(correct|not quite)\s*[!.:]?\s*(<\/[^>]+>)*\s*/i,'');
   document.querySelectorAll('.opt').forEach(b=>b.disabled=true);c.cs.qSum+=time;if(!ok)c.cs.wrong++;
-  const cn=LIST(c)[c.ci];S.log.push({station:c.st.id,concept:plain(cn.name),kind:c.kind==='p'?'CoMS':'Main',round:S.round,q:plain(Q.q)||`(image question: ${plain(cn.name)})`,time,hint:c.qHint,correct:ok});
+  const cn=LIST(c)[c.ci];S.log.push({station:c.st.id,concept:plain(cn.name),kind:c.kind==='p'?'CoMS':'Main',round:S.round,q:plain(Q.q)||`(image question: ${plain(cn.name)})`,qr:Q.q||'',time,hint:c.qHint,correct:ok});
   $('back').innerHTML=`<h3 class="${ok?'ok':'no'}">${ok?'✔ Correct!':'✘ Not quite!'}</h3>
    <div class="res"><b>You chose:</b> ${L[i]}${Q.optImg?'':'. '+rich(Q.options[i])}</div>
    <p>${rich(strip(Q.feedback[i]))}</p>
@@ -350,8 +351,8 @@ function showFinal(reason){
    <div class="panel"><h3>Your station route</h3>${S.route.length?S.route.map(nm).join(' → '):'No stations completed yet'}</div>
    <div class="panel"><h3>Your concept route</h3>${S.cRoute.length?S.cRoute.map(esc).join(' → '):'No concepts completed yet'}${S.pRoute.length?`<br><b>CoMS concepts:</b> ${S.pRoute.map(esc).join(' → ')}`:''}</div>
    <div class="panel"><h3>Time per station (longest → shortest)</h3>${times.length?`<ol>${times.map(([k,t])=>`<li>${esc(nm(k))}: ${fmt(t)}</li>`).join('')}</ol>`:'No stations completed yet'}</div>
-   <div class="panel"><h3>Questions that took longest</h3><ol>${longest.map(l=>`<li>[${esc(nm(l.station))}] ${esc(l.q.slice(0,140))} — ${fmt(l.time)}</li>`).join('')}</ol></div>
-   <div class="panel"><h3>Questions you used hints for</h3>${hinted.length?'<ul>'+hinted.map(l=>`<li>[${esc(nm(l.station))}] ${esc(l.q.slice(0,140))}</li>`).join('')+'</ul>':'None – amazing!'}</div>
+   <div class="panel"><h3>Questions that took longest</h3><ol>${longest.map(l=>`<li>[${esc(nm(l.station))}] ${short(l)} — ${fmt(l.time)}</li>`).join('')}</ol></div>
+   <div class="panel"><h3>Questions you used hints for</h3>${hinted.length?'<ul>'+hinted.map(l=>`<li>[${esc(nm(l.station))}] ${short(l)}</li>`).join('')+'</ul>':'None – amazing!'}</div>
    <div class="panel"><h3>CoMS concepts (optional, not scored)</h3>${STATIONS.map(s=>`<div>${esc(s.name)}: ${s.practice.length?cnt(S.pd[s.id])+'/'+s.practice.length:'coming soon'}</div>`).join('')}</div>
    <div class="panel noprint"><h3>Your progress report</h3><p>${esc(G.reportNote||'')}</p><button class="btn g" onclick="printReport()">⬇ Download report (PDF)</button>
    <p style="font-size:13px">Your browser's print window will open. Choose <b>Save as PDF</b> as the destination.</p>
