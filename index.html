@@ -90,6 +90,8 @@ const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(
 const fmt=ms=>{const s=Math.round(ms/1000);return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s'};
 const sec=ms=>Math.round(ms/100)/10;
 const LS='bondvoyage_users',loadU=()=>{try{return JSON.parse(localStorage.getItem(LS))||{}}catch(e){return{}}},saveU=u=>{try{localStorage.setItem(LS,JSON.stringify(u))}catch(e){}};
+const QP=new URLSearchParams(location.search),PID=(QP.get('pid')||QP.get('PID')||QP.get('rid')||'').trim().slice(0,60),RET=QP.get('ret')||'';
+let CD=null;
 let G,STATIONS,BADGES,BDESC={},S=null,U,REFS=[],INTRO_TOP='',lastAct=Date.now();
 const saveUserLocal=()=>{const all=loadU();all[U.key]=U;saveU(all)},ckey=c=>c.kind+'|'+c.st.id+'|'+c.ci;
 ['pointerdown','keydown','scroll','touchstart'].forEach(e=>addEventListener(e,()=>lastAct=Date.now(),{passive:true}));
@@ -99,24 +101,25 @@ Promise.resolve(typeof DATA!=='undefined'?DATA:null).then(d=>{if(!d)throw 0;init
 
 function init(d){
   G=d.game;STATIONS=d.stations;REFS=d.references||[];document.title=G.title;$('gtitle').textContent=G.title.toUpperCase();
-  const SE=window.SETTINGS||{};G.collectUrl=SE.collectUrl||G.collectUrl||'';G.surveyUrl=SE.surveyUrl||G.surveyUrl||'';
+  const SE=window.SETTINGS||{};G.collectUrl=SE.collectUrl||G.collectUrl||'';G.surveyUrl=SE.surveyUrl||G.surveyUrl||'';G.autoSurveySeconds=(SE.autoSurveySeconds!==undefined)?SE.autoSurveySeconds:300;if(SE.reportNote)G.reportNote=SE.reportNote;
   BADGES=[];BDESC={};
   STATIONS.forEach(s=>{s.badges={};for(const k in G.stationBadges){const n=G.stationBadges[k].replace('{station}',s.name);s.badges[k]=n;BADGES.push(n);BDESC[n]=(G.badgeDesc[k]||'').replace('{station}',s.name)}});
   for(const k in G.gameBadges){BADGES.push(G.gameBadges[k]);BDESC[G.gameBadges[k]]=G.badgeDesc[k]||''}
   INTRO_TOP=`<h2 style="font-size:16px">${esc(G.title)}</h2><p><i>${esc(G.subtitle||'')}</i></p>
    <div style="white-space:pre-line;font-size:15px;line-height:1.5">${bold(G.instructions)}</div>`;
-  $('introBody').innerHTML=INTRO_TOP+`<hr><b>Choose a username to track your attempts:</b><input class="u" id="uname" maxlength="30" placeholder="e.g. alex123" oninput="welcomeBack()" onkeydown="if(event.key==='Enter')begin()">
-   <div id="uinfo" style="font-size:14px"></div><div class="err" id="uerr"></div><button class="btn" onclick="begin()">Start adventure</button>`;
+  $('introBody').innerHTML=INTRO_TOP+(PID?`<hr><p>Participant ID: <b>${esc(PID)}</b></p><button class="btn" onclick="begin()">Start adventure</button>`
+   :`<hr><b>Choose a username to track your attempts:</b><input class="u" id="uname" maxlength="30" placeholder="e.g. alex123" oninput="welcomeBack()" onkeydown="if(event.key==='Enter')begin()">
+   <div id="uinfo" style="font-size:14px"></div><div class="err" id="uerr"></div><button class="btn" onclick="begin()">Start adventure</button>`);
 }
 const lastAttempt=u=>(u.attempts||[]).reduce((m,a)=>Math.max(m,a.n),0);
 function showWelcome(){$('introBody').innerHTML=INTRO_TOP+`<hr><button class="btn g" onclick="closeWelcome()">Close and keep playing</button>`;$('intro').style.zIndex=60;$('intro').classList.add('on');$('intro').scrollTop=0}
 function closeWelcome(){$('intro').classList.remove('on')}
 function welcomeBack(){$('uerr').textContent='';const n=$('uname').value.trim().toLowerCase(),u=n&&loadU()[n];$('uinfo').textContent=u?`Welcome back, ${u.name}! This will be attempt ${lastAttempt(u)+1}.`:''}
 function begin(){
-  const name=$('uname').value.trim();if(!name){$('uerr').textContent='Enter a username to start.';return}
+  const name=PID||$('uname').value.trim();if(!name){$('uerr').textContent='Enter a username to start.';return}
   const all=loadU(),key=name.toLowerCase();U=all[key]||{name,attempts:[]};U.key=key;$('intro').classList.remove('on');newGame();
 }
-function newGame(from){
+function newGame(from){clearCountdown();
   U.earned=U.earned||{};U.seen=U.seen||{};U.qseen=U.qseen||{};
   S={n:lastAttempt(U)+1,round:1,startedAt:Date.now(),roundStart:Date.now(),cd:{},pd:{},cf:{},st:{},done:{},pracDone:{},route:[],cRoute:[],pRoute:[],opened:[],score:0,badges:Object.keys(U.earned),
      log:[],visits:[],times:{},roundBadges:{},cur:null,finished:false,sent:{},autoShown:false,downloaded:false,restartedFrom:typeof from==='string'?from:''};
@@ -226,7 +229,7 @@ function answer(i){
 }
 function showHint(){
   const c=S.cur;if(!c||!c.q)return;c.cs.hint=true;c.qHint=true;
-  $('hTitle').textContent='Hint';$('hintText').innerHTML=(c.q.hint?`<p style="white-space:pre-line;font-size:17px">${rich(c.q.hint)}</p>`:'')+(c.q.hintImg?`<img class="pic" style="max-height:72vh" src="${c.q.hintImg}" alt="">`:'')||'xxx';
+  $('hTitle').textContent='Hint';$('hintText').innerHTML=(c.q.hint?`<p style="white-space:pre-line;font-size:17px">${rich(c.q.hint)}</p>`:'')+(c.q.hintImg?`<img class="pic" style="max-height:72vh" src="${c.q.hintImg}" alt="">`:'')||'<p>No hint is available for this question.</p>';
   const l=S.log[S.log.length-1];if(l&&!document.querySelector('.opt:not(:disabled)')&&l.station===c.st.id)l.hint=true;
   $('hov').classList.add('on');
 }
@@ -322,23 +325,26 @@ function printReport(){
   S.downloaded=true;sendEvent('downloaded_pdf');const t=document.title;document.title=`bond-voyage_${U.key.replace(/[^a-z0-9]/g,'_')}_attempt${S.n}_round${S.round}`;
   window.print();setTimeout(()=>document.title=t,1500);
 }
-function goSurvey(){
-  sendEvent('quit_to_survey');S.finished=true;
-  if(window.parent!==window){
-    // embedded in Qualtrics: tell the survey to continue
-    window.parent.postMessage({type:'gameDone',userId:U.name,attempts:S.n,rounds:S.round,badges:S.badges.length,score:S.score},'https://imperial.eu.qualtrics.com');
-  }else if(G.surveyUrl){
-    location.href=G.surveyUrl; // opened directly: old behaviour
-  }
+function surveyLink(){
+  let base=G.surveyUrl;try{if(RET){const u=new URL(RET);if(/(^|\.)qualtrics\.com$/i.test(u.hostname))base=RET}}catch(e){}
+  if(!base)return '';
+  try{const u=new URL(base);if(PID)u.searchParams.set('pid',PID);u.searchParams.set('score',S.score);u.searchParams.set('attempts',S.n);u.searchParams.set('rounds',S.round);u.searchParams.set('badges',S.badges.length);u.searchParams.set('hints',S.log.filter(l=>l.hint).length);return u.toString()}catch(e){return base}
 }
+function clearCountdown(){if(CD){clearInterval(CD);CD=null}}
+function startCountdown(){
+  clearCountdown();const sec=G.autoSurveySeconds;if(!sec||!G.surveyUrl)return;lastAct=Date.now();
+  CD=setInterval(()=>{const left=Math.max(0,sec-Math.floor((Date.now()-lastAct)/1000)),el=$('cd');if(el)el.textContent=Math.floor(left/60)+':'+String(left%60).padStart(2,'0');
+    if(left<=0){clearCountdown();sendEvent('auto_redirect_to_survey');goSurvey()}},1000);
+}
+function goSurvey(){clearCountdown();sendEvent('quit_to_survey');S.finished=true;S.surveyGone=true;const l=surveyLink();if(l)location.href=l}
 function quitToSurvey(){if(S.downloaded)goSurvey();else ask('Leave without your report?','You have not downloaded your report (PDF) yet. If you quit now you will not be able to see it again.','Quit and open the survey',goSurvey)}
-function showFinal(reason){const EMB=window.parent!==window;
+function showFinal(reason){
   S.finished=true;saveRound(reason);send(reason);
   const mainLog=S.log.filter(l=>l.kind==='Main'),times=Object.entries(S.times).sort((a,b)=>b[1]-a[1]),longest=[...mainLog].sort((a,b)=>b.time-a.time).slice(0,5),hinted=S.log.filter(l=>l.hint);
   const msg=reason==='timeout'?'The game ended automatically after 24 hours without activity.':reason==='closed'?'The game ended because the window was closed.':reason==='new_attempt'?'':'';
-  const surv=G.surveyUrl?`<a href="${G.surveyUrl}" target="_blank" rel="noopener">${esc(G.surveyUrl)}</a>`:'(link coming soon)';
+  const sl=surveyLink(),surv=sl?`<a href="${esc(sl)}">post-game survey link</a>`:'(link coming soon)';
   $('finBody').innerHTML=`<div class="panel"><h2 style="font-size:16px">🏆 Report</h2><p>${esc(U.name)} · attempt ${S.n}, round ${S.round}</p>${msg?`<p><b>${msg}</b></p>`:''}
-   <p>${EMB?'Thank you for playing! When you are ready, press the blue button below to continue to the post-game survey.':'Thank you for playing, don\'t forget to complete the post-game survey: '+surv}</p></div>
+   <p>Thank you for playing, don't forget to complete the post-game survey: ${surv}</p></div>
    <div class="panel" style="break-inside:auto"><h3>Badges (${S.badges.length}/${BADGES.length})</h3>${BADGES.map(b=>`<div class="brow">${S.badges.includes(b)?`<span class="badge">🏅 ${esc(b)}${(U.earned&&U.earned[b]&&U.earned[b]!==S.n)?` · attempt ${U.earned[b]}`:''}</span>`:`<span class="badge lk">🔒 ${esc(b)}</span>`}<span class="bdesc">${esc(BDESC[b]||'')}</span></div>`).join('')}</div>
    <div class="panel"><h3>Total score</h3><div style="font-size:28px;font-weight:800">${S.score} pts</div></div>
    <div class="panel"><h3>Your station route</h3>${S.route.length?S.route.map(nm).join(' → '):'No stations completed yet'}</div>
@@ -349,19 +355,20 @@ function showFinal(reason){const EMB=window.parent!==window;
    <div class="panel"><h3>CoMS concepts (optional, not scored)</h3>${STATIONS.map(s=>`<div>${esc(s.name)}: ${s.practice.length?cnt(S.pd[s.id])+'/'+s.practice.length:'coming soon'}</div>`).join('')}</div>
    <div class="panel noprint"><h3>Your progress report</h3><p>${esc(G.reportNote||'')}</p><button class="btn g" onclick="printReport()">⬇ Download report (PDF)</button>
    <p style="font-size:13px">Your browser's print window will open. Choose <b>Save as PDF</b> as the destination.</p>
-   <button class="btn" onclick="quitToSurvey()">${EMB?'Finish &amp; continue to the post-game survey':'Quit game &amp; open the post-game survey'}</button></div>
+   <button class="btn g" onclick="quitToSurvey()">Quit game &amp; continue to the post-game survey</button>
+   ${G.autoSurveySeconds&&G.surveyUrl?`<p class="noprint" style="font-size:13px">⏳ You will be taken to the post-game survey automatically in <b id="cd"></b> unless you keep playing.</p>`:''}</div>
    <div class="panel noprint"><button class="btn" onclick="nextRound()">Back to map – start round ${S.round+1}</button>
    <p style="font-size:13px">Round ${S.round+1} lets you replay finished concepts to try for the no-wrong-answer and no-hint badges.</p>
    <button class="btn r" onclick="askNew()">Start a new attempt</button></div>`;
-  $('fin').classList.add('on');
+  $('fin').classList.add('on');startCountdown();
 }
-function nextRound(){sendEvent('next_round_click');S.round++;S.roundStart=Date.now();S.finished=false;S.cur=null;$('fin').classList.remove('on');lastAct=Date.now();renderMap()}
+function nextRound(){clearCountdown();sendEvent('next_round_click');S.round++;S.roundStart=Date.now();S.finished=false;S.cur=null;$('fin').classList.remove('on');lastAct=Date.now();renderMap()}
 const NEWMSG='If you start a new attempt you will <b>lose the progress of this attempt</b> and will not be able to see this report again, so download it first if you want to keep it. Badges you have already earned are kept, so you can aim for new ones!';
 function askNew(){ask('Start a new attempt?',NEWMSG,'Start new attempt',()=>{sendEvent('new_attempt_click_end_page');newGame('end page')})}
 function askNewMap(){ask('Start a new attempt?',NEWMSG,'Start new attempt',()=>{endVisit(false);S.cur=null;$('sov').classList.remove('on');if(!S.finished){saveRound('new_attempt');send('new_attempt')}newGame('map')})}
 /* ---------- timeout + closing the window ---------- */
 setInterval(()=>{if(S&&!S.finished&&Date.now()-lastAct>(G.inactivityHours||24)*3600e3)endGame('timeout')},60000);
-addEventListener('beforeunload',e=>{if(S&&!S.finished){e.preventDefault();e.returnValue='Are you sure? If you close this all your progress will be lost!';return e.returnValue}});
+addEventListener('beforeunload',e=>{if(!S)return;if(!S.finished){e.preventDefault();e.returnValue='Are you sure? If you close this all your progress will be lost!';return e.returnValue}if(!S.surveyGone&&G.surveyUrl){e.preventDefault();e.returnValue='Please continue to the post-game survey before you close this page.';return e.returnValue}});
 addEventListener('pagehide',()=>{if(S&&!S.finished&&!S.sent[S.round]){endVisit(false);saveRound('closed');send('closed')}});
 </script>
 </body>
